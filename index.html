@@ -433,7 +433,7 @@
 
   <script>
     // ========== CONFIG ==========
-    const BACKEND_URL = "https://script.google.com/macros/s/AKfycbyoIBDqnlAOCwEvi_ecwyWGhlVGy5SUMHeSfNz8jL6ABU8faO-8DXNLjN5ZffXYh4uViA/exec";
+    const BACKEND_URL = "https://script.google.com/macros/s/AKfycbyMbNftg2jIkno9p8-e8W2J_eHJo7xpoRTAJ6f0VyzKGwkEWmTrq-L0EAVQZlrnCvrN/exec";
     // ============================
 
     let isEditMode = false;
@@ -627,12 +627,30 @@
       // Show loading state
       list.innerHTML = '<div class="attendance-card loading-card">Loading attendance records...</div>';
       
-      fetch(BACKEND_URL + '?method=getAllAttendanceData')
+      // Add timeout to prevent hanging requests
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Request timeout')), 15000)
+      );
+      
+      Promise.race([
+        fetch(BACKEND_URL + '?method=getAllAttendanceData'),
+        timeoutPromise
+      ])
         .then(response => response.json())
-        .then(data => displayAttendanceListOptimized(data.eventsWithAttendance || []))
+        .then(data => {
+          if (data.eventsWithAttendance && data.eventsWithAttendance.length > 0) {
+            displayAttendanceListOptimized(data.eventsWithAttendance);
+          } else {
+            list.innerHTML = '<div class="attendance-card">No attendance records found.</div>';
+          }
+        })
         .catch(err => {
           console.error('Error loading attendance:', err);
-          list.innerHTML = '<div class="attendance-card error-card">Error loading attendance records. Please try again.</div>';
+          if (err.message === 'Request timeout') {
+            list.innerHTML = '<div class="attendance-card error-card">Request timed out. Please try again.</div>';
+          } else {
+            list.innerHTML = '<div class="attendance-card error-card">Error loading attendance records. Please try again.</div>';
+          }
         });
     }
     // Fetch present students for an event from the matrix
@@ -774,6 +792,12 @@
         .split(',')
         .map(s => s.trim())
         .filter(Boolean);
+      
+      // Validate that at least one student is selected
+      if (presentStudentsArr.length === 0) {
+        alert('Please select at least one student');
+        return;
+      }
       
       // Show loading state
       const submitBtn = form.querySelector('button[type="submit"]');
