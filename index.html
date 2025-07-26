@@ -1,4 +1,4 @@
-<!DOCTYPE html> 
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -288,6 +288,21 @@
       .fab { width: 48px; height: 48px; font-size: 30px; right: 14px; bottom: 70px; }
       .form-container, .attendance-form-container { padding: 18px 4px 14px 4px; }
     }
+    
+    /* Loading states */
+    .loading-card {
+      text-align: center;
+      color: #666;
+      padding: 20px;
+      font-style: italic;
+    }
+    
+    .error-card {
+      text-align: center;
+      color: #dc3545;
+      padding: 20px;
+      font-weight: 500;
+    }
   </style>
 </head>
 <body>
@@ -418,7 +433,7 @@
 
   <script>
     // ========== CONFIG ==========
-    const BACKEND_URL = "https://script.google.com/macros/s/AKfycbynIrGMUGlx2ralXRpNaaMRKXWnuLq-9zhfkAk-FDFqQ7JPDzCdgPbJgyxqalFGvFLo/exec";
+    const BACKEND_URL = "https://script.google.com/macros/s/AKfycbyoIBDqnlAOCwEvi_ecwyWGhlVGy5SUMHeSfNz8jL6ABU8faO-8DXNLjN5ZffXYh4uViA/exec";
     // ============================
 
     let isEditMode = false;
@@ -608,10 +623,17 @@
 
     // === ATTENDANCE ===
     function loadAttendanceList() {
-      fetch(BACKEND_URL + '?method=getAllEventIds')
+      const list = document.getElementById('attendanceEventList');
+      // Show loading state
+      list.innerHTML = '<div class="attendance-card loading-card">Loading attendance records...</div>';
+      
+      fetch(BACKEND_URL + '?method=getAllAttendanceData')
         .then(response => response.json())
-        .then(eventIds => displayAttendanceList(Array.isArray(eventIds) ? eventIds : []))
-        .catch(err => alert('Error loading attendance records: ' + err));
+        .then(data => displayAttendanceListOptimized(data.eventsWithAttendance || []))
+        .catch(err => {
+          console.error('Error loading attendance:', err);
+          list.innerHTML = '<div class="attendance-card error-card">Error loading attendance records. Please try again.</div>';
+        });
     }
     // Fetch present students for an event from the matrix
     function fetchPresentStudents(eventId, callback) {
@@ -626,7 +648,45 @@
           }
         });
     }
-    // Display attendance list using matrix model
+    // Display attendance list using matrix model (optimized version)
+    function displayAttendanceListOptimized(attendanceData) {
+      const list = document.getElementById('attendanceEventList');
+      list.innerHTML = '';
+      if (!attendanceData.length) {
+        list.innerHTML = '<div class="attendance-card">No attendance records found.</div>';
+        return;
+      }
+      
+      // Create all cards at once (no async calls needed)
+      attendanceData.forEach(item => {
+        const card = document.createElement('div');
+        card.className = 'attendance-card';
+        card.innerHTML = `
+          <div class="attendance-info">
+            <div class="attendance-event-id">${item.eventId}</div>
+            <div class="attendance-event-name">${item.presentStudents.join(', ')}</div>
+          </div>
+          <div class="attendance-actions">
+            <button class="attendance-action-btn edit-btn" title="Edit Attendance">&#9998;</button>
+            <button class="attendance-action-btn delete-btn" title="Delete Attendance">&#128465;</button>
+          </div>
+        `;
+        
+        // Add event listeners for edit and delete
+        card.querySelector('.edit-btn').addEventListener('click', () => {
+          console.log('Edit button clicked for event:', item.eventId);
+          openAttendanceFormForEdit(item.eventId);
+        });
+        card.querySelector('.delete-btn').addEventListener('click', () => {
+          console.log('Delete button clicked for event:', item.eventId);
+          deleteAttendanceRecord(item.eventId);
+        });
+        
+        list.appendChild(card);
+      });
+    }
+
+    // Display attendance list using matrix model (legacy version - kept for compatibility)
     function displayAttendanceList(eventIds) {
       const list = document.getElementById('attendanceEventList');
       list.innerHTML = '';
@@ -634,6 +694,7 @@
         list.innerHTML = '<div class="attendance-card">No attendance records found.</div>';
         return;
       }
+      
       eventIds.forEach(eventId => {
         fetchPresentStudents(eventId, function(presentStudents) {
           const card = document.createElement('div');
@@ -701,16 +762,31 @@
       const form = document.getElementById('attendanceForm');
       const isEdit = form.attendanceEditMode.value === "true";
       const eventId = isEdit ? form.attendanceEventIdReadonly.value : form.attendanceEventId.value;
+      
+      // Validate event ID
+      if (!eventId) {
+        alert('Please select an event');
+        return;
+      }
+      
       // Get present students as an array
       const presentStudentsArr = form.presentStudents.value
         .split(',')
         .map(s => s.trim())
         .filter(Boolean);
+      
+      // Show loading state
+      const submitBtn = form.querySelector('button[type="submit"]');
+      const originalText = submitBtn.textContent;
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Saving...';
+      
       // Use the new matrix API
       const formData = new URLSearchParams();
       formData.append('action', 'markAttendanceMatrix');
       formData.append('eventId', eventId);
       formData.append('presentEnrollmentNumbers', JSON.stringify(presentStudentsArr));
+      
       fetch(BACKEND_URL, {
         method: "POST",
         body: formData
@@ -718,18 +794,32 @@
       .then(res => res.json())
       .then(res => {
         if (res.status === "success") {
-          alert("Attendance saved!");
+          alert("Attendance saved successfully!");
           showPage('attendance');
           loadAttendanceList();
         } else {
           alert(res.error || "Failed to save attendance.");
         }
+      })
+      .catch(err => {
+        console.error('Error saving attendance:', err);
+        alert('Error saving attendance. Please try again.');
+      })
+      .finally(() => {
+        // Reset button state
+        submitBtn.disabled = false;
+        submitBtn.textContent = originalText;
       });
     }
 
     // Delete attendance record from matrix
     function deleteAttendanceRecord(eventId) {
       if (!confirm('Are you sure you want to delete attendance for this event?')) return;
+      
+      // Show loading state
+      const list = document.getElementById('attendanceEventList');
+      const originalContent = list.innerHTML;
+      list.innerHTML = '<div class="attendance-card loading-card">Deleting attendance...</div>';
       
       // Clear all attendance for this event by setting all values to empty
       const formData = new URLSearchParams();
@@ -748,9 +838,14 @@
           loadAttendanceList();
         } else {
           alert(res.error || "Failed to delete attendance.");
+          list.innerHTML = originalContent; // Restore original content on error
         }
       })
-      .catch(err => alert('Error: ' + err));
+      .catch(err => {
+        console.error('Error deleting attendance:', err);
+        alert('Error deleting attendance. Please try again.');
+        list.innerHTML = originalContent; // Restore original content on error
+      });
     }
 
     // === PRESENT STUDENTS MODAL ===
