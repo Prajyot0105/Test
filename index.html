@@ -433,7 +433,7 @@
 
   <script>
     // ========== CONFIG ==========
-    const BACKEND_URL = "https://script.google.com/macros/s/AKfycbxmdzm7NFPrznk_FgU6BRYwCeSvAXM8hB11tFJXjZMuxFD2kyHr1YOtHeOz6cfmzmiK/exec";
+    const BACKEND_URL = "https://script.google.com/macros/s/AKfycbw1E6OMi3MNvNke_0rdGw3Wpqbs3ujxL_eLSMRAnV2oFnQc7MeVjCQ-us6K2EY9mkaG/exec";
     // ============================
     
     // Authentication state
@@ -505,8 +505,18 @@
     function loadEvents() {
       fetch(BACKEND_URL + '?method=getEvents')
         .then(response => response.json())
-        .then(events => displayEvents(Array.isArray(events) ? events : []))
-        .catch(err => alert('Error loading events: ' + err));
+        .then(data => {
+          if (data.status === 'error' && data.authenticated === false) {
+            // Authentication failed - redirect to access denied
+            checkAuthentication();
+            return;
+          }
+          displayEvents(Array.isArray(data) ? data : []);
+        })
+        .catch(err => {
+          console.error('Error loading events:', err);
+          alert('Error loading events: ' + err);
+        });
     }
     function displayEvents(events) {
       const eventList = document.getElementById('eventList');
@@ -682,6 +692,11 @@
       ])
         .then(response => response.json())
         .then(data => {
+          if (data.status === 'error' && data.authenticated === false) {
+            // Authentication failed - redirect to access denied
+            checkAuthentication();
+            return;
+          }
           if (data.eventsWithAttendance && data.eventsWithAttendance.length > 0) {
             displayAttendanceListOptimized(data.eventsWithAttendance);
           } else {
@@ -794,10 +809,16 @@
       form.attendanceEventId.setAttribute('required', 'required');
       fetch(BACKEND_URL + '?method=getAllEventIds')
         .then(res => res.json())
-        .then(eventIds => {
+        .then(data => {
+          if (data.status === 'error' && data.authenticated === false) {
+            // Authentication failed - redirect to access denied
+            checkAuthentication();
+            return;
+          }
+          const eventIds = Array.isArray(data) ? data : [];
           const select = form.attendanceEventId;
           select.innerHTML = '<option value="">Select Event</option>';
-          (eventIds || []).forEach(id => {
+          eventIds.forEach(id => {
             select.innerHTML += `<option value="${id}">${id}</option>`;
           });
           form.presentStudents.value = '';
@@ -923,10 +944,16 @@
         .split(',').map(s => s.trim()).filter(Boolean);
       fetch(BACKEND_URL + '?method=getAllEnrollmentNumbers')
         .then(res => res.json())
-        .then(enrollmentNumbers => {
+        .then(data => {
+          if (data.status === 'error' && data.authenticated === false) {
+            // Authentication failed - redirect to access denied
+            checkAuthentication();
+            return;
+          }
+          const enrollmentNumbers = Array.isArray(data) ? data : [];
           const list = document.getElementById('studentCheckboxList');
           list.innerHTML = '';
-          (enrollmentNumbers || []).forEach(num => {
+          enrollmentNumbers.forEach(num => {
             const checked = present.includes(String(num).trim()) ? 'checked' : '';
             list.innerHTML += `
               <div>
