@@ -9,7 +9,7 @@
   <style>
     html, body { height: auto; min-height: 100vh; overflow-x: auto; overflow-y: auto; }
     body {
-      font-family: 'Roboto',             Arial, sans-serif;
+      font-family: 'Roboto', Arial, sans-serif;
       margin: 0;
       padding: 0;
       color: #222;
@@ -311,8 +311,6 @@
     <span class="app-title" id="appBarTitle">NSS Events</span>
   </div>
 
-
-
   <!-- Main Events List Page -->
   <div id="eventsListPage" class="main-content">
     <div class="event-list" id="eventList"></div>
@@ -435,7 +433,7 @@
 
   <script>
     // ========== CONFIG ==========
-    const BACKEND_URL = "https://script.google.com/macros/s/AKfycbwjR34gFiels_TFOlp3CcLGYobFCtsKLNTq6GbhFOpTvKYUB_sjGCwkeygsv-ugdps/exec"; // Empty because we're serving from the same script
+    const BACKEND_URL = "https://script.google.com/macros/s/AKfycbx6NVJFwcFcggDm4hJhAkrp15Tg9xaz-6LManTxGIEzlsOzxZeaOMIYuE0e89tsHLek/exec"; // Empty because we're serving from the same script
     // ============================
     
     // Authentication state
@@ -458,8 +456,6 @@
         } else {
           isAuthenticated = false;
           currentUserEmail = null;
-          // Redirect to authentication page
-          window.location.href = '?forceAuth=true';
           return false;
         }
       } catch (error) {
@@ -469,6 +465,18 @@
       }
     }
 
+    // Check authentication before any API call
+    async function checkAuthBeforeRequest() {
+      if (!isAuthenticated) {
+        const isAuth = await checkAuthentication();
+        if (!isAuth) {
+          showAccessDenied();
+          return false;
+        }
+      }
+      return true;
+    }
+
     // Initialize authentication on page load
     async function initializeApp() {
       const isAuth = await checkAuthentication();
@@ -476,6 +484,22 @@
         showPage('events');
         setNavActive(0);
         loadEvents();
+      } else {
+        // Show access denied message
+        document.body.innerHTML = `
+          <div style="font-family: Arial, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: #f5f5f5;">
+            <div style="background: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.1); text-align: center; max-width: 400px;">
+              <h2 style="color: #dc3545; margin-bottom: 20px; font-size: 24px;">🔒 Access Restricted</h2>
+              <p style="color: #666; margin-bottom: 20px; line-height: 1.6;">This application is restricted to authorized faculty members only.</p>
+              <div style="color: #888; font-size: 14px; background: #f8f9fa; padding: 10px; border-radius: 6px; margin: 15px 0;">
+                <strong>Current User:</strong><br>
+                ${currentUserEmail || 'Not logged in'}
+              </div>
+              <p style="color: #666; margin-bottom: 20px;">Please contact your administrator to request access.</p>
+              <p style="color: #1a73e8; font-weight: 500;">Contact: prajyot.patil@gcsanquelim.ac.in</p>
+            </div>
+          </div>
+        `;
       }
     }
 
@@ -498,21 +522,41 @@
     }
 
     // === EVENT LIST ===
-    function loadEvents() {
+    async function loadEvents() {
+      if (!(await checkAuthBeforeRequest())) return;
+      
       fetch('?method=getEvents')
         .then(response => response.json())
         .then(data => {
           if (data.status === 'error' && data.authenticated === false) {
-            // Authentication failed - reload page to trigger Apps Script auth
-            window.location.reload();
+            // Authentication failed - show access denied
+            showAccessDenied();
             return;
           }
           displayEvents(Array.isArray(data) ? data : []);
         })
         .catch(err => {
           console.error('Error loading events:', err);
-          showError('Failed to load events. Please try again.');
+          alert('Error loading events: ' + err);
         });
+    }
+
+    // Show access denied message
+    function showAccessDenied() {
+      document.body.innerHTML = `
+        <div style="font-family: Arial, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: #f5f5f5;">
+          <div style="background: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.1); text-align: center; max-width: 400px;">
+            <h2 style="color: #dc3545; margin-bottom: 20px; font-size: 24px;">🔒 Access Restricted</h2>
+            <p style="color: #666; margin-bottom: 20px; line-height: 1.6;">This application is restricted to authorized faculty members only.</p>
+            <div style="color: #888; font-size: 14px; background: #f8f9fa; padding: 10px; border-radius: 6px; margin: 15px 0;">
+              <strong>Current User:</strong><br>
+              ${currentUserEmail || 'Not logged in'}
+            </div>
+            <p style="color: #666; margin-bottom: 20px;">Please contact your administrator to request access.</p>
+            <p style="color: #1a73e8; font-weight: 500;">Contact: prajyot.patil@gcsanquelim.ac.in</p>
+          </div>
+        </div>
+      `;
     }
     function displayEvents(events) {
       const eventList = document.getElementById('eventList');
@@ -524,23 +568,17 @@
       events.forEach(event => {
         const eventCard = document.createElement('div');
         eventCard.className = 'event-card';
-        
-        // Sanitize event data
-        const sanitizedEventId = sanitizeHTML(event.eventId || '');
-        const sanitizedEventName = sanitizeHTML(event.eventName || '');
-        const sanitizedPhotoUrl = event.geotaggedPhoto ? sanitizeHTML(event.geotaggedPhoto) : '';
-        
         eventCard.innerHTML = `
           <div class="event-img">
-            ${sanitizedPhotoUrl ? `<img src="${sanitizedPhotoUrl}" style="width:56px;height:56px;object-fit:cover;border-radius:8px;" alt="Event photo">` : ''}
+            ${event.geotaggedPhoto ? `<img src="${event.geotaggedPhoto}" style="width:56px;height:56px;object-fit:cover;border-radius:8px;">` : ''}
           </div>
           <div class="event-info">
-            <div class="event-id">${sanitizedEventId}</div>
-            <div class="event-name">${sanitizedEventName}</div>
+            <div class="event-id">${event.eventId}</div>
+            <div class="event-name">${event.eventName}</div>
           </div>
           <div class="event-actions">
-            <button class="event-action-btn delete-btn" title="Delete" aria-label="Delete event">&#128465;</button>
-            <button class="event-action-btn edit-btn" title="Edit" aria-label="Edit event">&#9998;</button>
+            <button class="event-action-btn delete-btn" title="Delete">&#128465;</button>
+            <button class="event-action-btn edit-btn" title="Edit">&#9998;</button>
           </div>
         `;
         // Tile click (excluding edit/delete buttons)
@@ -592,13 +630,17 @@
         }
       }
     }
-    function editEvent(eventId) {
+    async function editEvent(eventId) {
+      if (!(await checkAuthBeforeRequest())) return;
+      
       fetch('?method=getEventById&eventId=' + encodeURIComponent(eventId))
         .then(res => res.json())
         .then(eventObj => showCreateEventPage(true, eventObj))
         .catch(err => alert('Error: ' + err));
     }
-    function deleteEvent(eventId) {
+    async function deleteEvent(eventId) {
+      if (!(await checkAuthBeforeRequest())) return;
+      
       console.log('deleteEvent called with eventId:', eventId);
       if (!confirm('Are you sure you want to delete this event?')) return;
       const formData = new URLSearchParams();
@@ -610,37 +652,26 @@
         body: formData
       })
       .then(res => res.json())
-              .then(res => {
-          if (res.status === "success") {
-            showSuccess("Event deleted successfully!");
-            loadEvents();
-          } else {
-            showError(res.error || "Failed to delete event.");
-          }
-        })
-        .catch(err => {
-          console.error('Error deleting event:', err);
-          showError('Failed to delete event. Please try again.');
-        });
+      .then(res => {
+        if (res.status === "success") {
+          alert("Event deleted successfully!");
+          loadEvents();
+        } else {
+          alert(res.error || "Failed to delete event.");
+        }
+      })
+      .catch(err => alert('Error: ' + err));
     }
     async function handleFormSubmit(e) {
       e.preventDefault();
+      if (!(await checkAuthBeforeRequest())) return;
+      
       const form = document.getElementById('eventForm');
       const isEdit = form.editMode.value === "true";
 
       // Validate required fields
-      const requiredFields = ['eventId', 'eventName', 'eventDate', 'eventTime', 'nssHours'];
-      const missingFields = requiredFields.filter(field => !form[field].value.trim());
-      
-      if (missingFields.length > 0) {
-        showError('Please fill all required fields: ' + missingFields.join(', '));
-        return;
-      }
-      
-      // Validate NSS hours
-      const nssHours = parseInt(form.nssHours.value);
-      if (isNaN(nssHours) || nssHours < 0 || nssHours > 24) {
-        showError('NSS Hours must be a number between 0 and 24');
+      if (!form.eventId.value || !form.eventName.value || !form.eventDate.value || !form.eventTime.value || !form.nssHours.value) {
+        alert('Please fill all required fields');
         return;
       }
 
@@ -652,28 +683,8 @@
       const photoInput = form.geotaggedPhoto;
       let geotaggedPhotoUrl = '';
       if (photoInput.files && photoInput.files.length > 0) {
-        const file = photoInput.files[0];
-        
-        // Validate file type
-        const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
-        if (!allowedTypes.includes(file.type.toLowerCase())) {
-          showError('Please select a valid image file (JPEG, PNG, GIF, WebP)');
-          return;
-        }
-        
-        // Validate file size (5MB limit)
-        const maxSize = 5 * 1024 * 1024; // 5MB
-        if (file.size > maxSize) {
-          showError('File size must be less than 5MB');
-          return;
-        }
-        
-        try {
-          geotaggedPhotoUrl = await uploadGeotaggedPhoto(file);
-        } catch (error) {
-          showError('Failed to upload image. Please try again.');
-          return;
-        }
+        // For single file, or loop for multiple
+        geotaggedPhotoUrl = await uploadGeotaggedPhoto(photoInput.files[0]);
       }
 
       // Now submit the event data, including geotaggedPhotoUrl
@@ -711,7 +722,9 @@
     }
 
     // === ATTENDANCE ===
-    function loadAttendanceList() {
+    async function loadAttendanceList() {
+      if (!(await checkAuthBeforeRequest())) return;
+      
       const list = document.getElementById('attendanceEventList');
       // Show loading state
       list.innerHTML = '<div class="attendance-card loading-card">Loading attendance records...</div>';
@@ -727,11 +740,6 @@
       ])
         .then(response => response.json())
         .then(data => {
-          if (data.status === 'error' && data.authenticated === false) {
-            // Authentication failed - redirect to access denied
-            checkAuthentication();
-            return;
-          }
           if (data.eventsWithAttendance && data.eventsWithAttendance.length > 0) {
             displayAttendanceListOptimized(data.eventsWithAttendance);
           } else {
@@ -844,16 +852,10 @@
       form.attendanceEventId.setAttribute('required', 'required');
       fetch('?method=getAllEventIds')
         .then(res => res.json())
-        .then(data => {
-          if (data.status === 'error' && data.authenticated === false) {
-            // Authentication failed - redirect to access denied
-            checkAuthentication();
-            return;
-          }
-          const eventIds = Array.isArray(data) ? data : [];
+        .then(eventIds => {
           const select = form.attendanceEventId;
           select.innerHTML = '<option value="">Select Event</option>';
-          eventIds.forEach(id => {
+          (eventIds || []).forEach(id => {
             select.innerHTML += `<option value="${id}">${id}</option>`;
           });
           form.presentStudents.value = '';
@@ -979,16 +981,10 @@
         .split(',').map(s => s.trim()).filter(Boolean);
       fetch('?method=getAllEnrollmentNumbers')
         .then(res => res.json())
-        .then(data => {
-          if (data.status === 'error' && data.authenticated === false) {
-            // Authentication failed - redirect to access denied
-            checkAuthentication();
-            return;
-          }
-          const enrollmentNumbers = Array.isArray(data) ? data : [];
+        .then(enrollmentNumbers => {
           const list = document.getElementById('studentCheckboxList');
           list.innerHTML = '';
-          enrollmentNumbers.forEach(num => {
+          (enrollmentNumbers || []).forEach(num => {
             const checked = present.includes(String(num).trim()) ? 'checked' : '';
             list.innerHTML += `
               <div>
@@ -1033,18 +1029,32 @@
     // === UI EVENT HOOKS ===
     document.addEventListener('DOMContentLoaded', function() {
       // Navigation
-      document.getElementById('navEvents').addEventListener('click', () => {
-        showPage('events'); setNavActive(0); loadEvents();
+      document.getElementById('navEvents').addEventListener('click', async () => {
+        showPage('events'); setNavActive(0); await loadEvents();
       });
-      document.getElementById('navAttendance').addEventListener('click', () => {
-        showPage('attendance'); setNavActive(1); loadAttendanceList();
+      document.getElementById('navAttendance').addEventListener('click', async () => {
+        showPage('attendance'); setNavActive(1); await loadAttendanceList();
       });
       // FABs
-      document.getElementById('addEventBtn').addEventListener('click', () => showCreateEventPage(false, null));
-      document.getElementById('addAttendanceBtn').addEventListener('click', openAttendanceForm);
+      document.getElementById('addEventBtn').addEventListener('click', async () => {
+        if (await checkAuthBeforeRequest()) {
+          showCreateEventPage(false, null);
+        }
+      });
+      document.getElementById('addAttendanceBtn').addEventListener('click', async () => {
+        if (await checkAuthBeforeRequest()) {
+          openAttendanceForm();
+        }
+      });
       // Cancel buttons
-      document.getElementById('cancelFormBtn').addEventListener('click', () => { showPage('events'); loadEvents(); });
-      document.getElementById('cancelAttendanceFormBtn').addEventListener('click', () => { showPage('attendance'); loadAttendanceList(); });
+      document.getElementById('cancelFormBtn').addEventListener('click', async () => { 
+        showPage('events'); 
+        await loadEvents(); 
+      });
+      document.getElementById('cancelAttendanceFormBtn').addEventListener('click', async () => { 
+        showPage('attendance'); 
+        await loadAttendanceList(); 
+      });
       // Form submits
       document.getElementById('eventForm').addEventListener('submit', handleFormSubmit);
       document.getElementById('attendanceForm').addEventListener('submit', handleAttendanceFormSubmit);
@@ -1069,48 +1079,32 @@
         Array.from(document.querySelectorAll('#studentCheckboxList input[type="checkbox"]')).forEach(cb => cb.checked = false);
         document.querySelector('input[name="presentStudents"]').value = '';
       });
-      // Debounced search function
-      let searchTimeout;
       document.getElementById('studentSearch').addEventListener('input', function() {
-        clearTimeout(searchTimeout);
-        searchTimeout = setTimeout(() => {
-          const search = this.value.toLowerCase();
-          Array.from(document.querySelectorAll('#studentCheckboxList label')).forEach(label => {
-            const text = label.textContent.toLowerCase();
-            label.parentElement.style.display = text.includes(search) ? '' : 'none';
-          });
-        }, 300); // 300ms delay
+        const search = this.value.toLowerCase();
+        Array.from(document.querySelectorAll('#studentCheckboxList label')).forEach(label => {
+          const text = label.textContent.toLowerCase();
+          label.parentElement.style.display = text.includes(search) ? '' : 'none';
+        });
       });
       // Hide modal if click outside
       document.getElementById('studentModal').addEventListener('click', function(e) {
         if (e.target === this) this.style.display = 'none';
       });
-      // Initial load: show events (authentication handled by Apps Script)
-      initializeApp(); 
+      // Initial load: check authentication and show events
+      initializeApp();
     });
 
     // Event Summary Modal logic
     function showEventSummaryModal(event) {
       const modal = document.getElementById('eventSummaryModal');
       const content = document.getElementById('eventSummaryContent');
-      
-      // Sanitize all event data
-      const sanitizedEvent = {
-        eventId: sanitizeHTML(event.eventId || ''),
-        eventName: sanitizeHTML(event.eventName || ''),
-        eventDate: sanitizeHTML(event.eventDate || ''),
-        eventTime: sanitizeHTML(event.eventTime || ''),
-        description: sanitizeHTML(event.description || '-'),
-        nssHours: sanitizeHTML(event.nssHours || '0')
-      };
-      
       content.innerHTML = `
-        <b>Event ID:</b> ${sanitizedEvent.eventId}<br>
-        <b>Name:</b> ${sanitizedEvent.eventName}<br>
-        <b>Date:</b> ${sanitizedEvent.eventDate}<br>
-        <b>Time:</b> ${sanitizedEvent.eventTime}<br>
-        <b>Description:</b> ${sanitizedEvent.description}<br>
-        <b>NSS Hours:</b> ${sanitizedEvent.nssHours}
+        <b>Event ID:</b> ${event.eventId}<br>
+        <b>Name:</b> ${event.eventName}<br>
+        <b>Date:</b> ${event.eventDate}<br>
+        <b>Time:</b> ${event.eventTime}<br>
+        <b>Description:</b> ${event.description || '-'}<br>
+        <b>NSS Hours:</b> ${event.nssHours}
       `;
       modal.style.display = 'flex';
     }
@@ -1151,77 +1145,6 @@
         };
         reader.readAsDataURL(file);
       });
-    }
-
-    // === UTILITY FUNCTIONS ===
-    
-    // Sanitize HTML to prevent XSS
-    function sanitizeHTML(str) {
-      if (typeof str !== 'string') return str;
-      const div = document.createElement('div');
-      div.textContent = str;
-      return div.innerHTML;
-    }
-    
-    // Validate and sanitize input
-    function validateInput(input, maxLength = 100) {
-      if (!input || typeof input !== 'string') return '';
-      const sanitized = input.trim().substring(0, maxLength);
-      return sanitized.replace(/[<>]/g, ''); // Remove potential HTML tags
-    }
-    
-    // Show user-friendly error messages
-    function showError(message, duration = 5000) {
-      // Create error notification
-      const errorDiv = document.createElement('div');
-      errorDiv.style.cssText = `
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        background: #dc3545;
-        color: white;
-        padding: 12px 20px;
-        border-radius: 8px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-        z-index: 1000;
-        max-width: 300px;
-        font-size: 14px;
-      `;
-      errorDiv.textContent = message;
-      document.body.appendChild(errorDiv);
-      
-      // Auto-remove after duration
-      setTimeout(() => {
-        if (errorDiv.parentNode) {
-          errorDiv.parentNode.removeChild(errorDiv);
-        }
-      }, duration);
-    }
-    
-    // Show success messages
-    function showSuccess(message, duration = 3000) {
-      const successDiv = document.createElement('div');
-      successDiv.style.cssText = `
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        background: #28a745;
-        color: white;
-        padding: 12px 20px;
-        border-radius: 8px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-        z-index: 1000;
-        max-width: 300px;
-        font-size: 14px;
-      `;
-      successDiv.textContent = message;
-      document.body.appendChild(successDiv);
-      
-      setTimeout(() => {
-        if (successDiv.parentNode) {
-          successDiv.parentNode.removeChild(successDiv);
-        }
-      }, duration);
     }
   </script>
 </body>
