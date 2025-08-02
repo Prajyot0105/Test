@@ -433,9 +433,7 @@
 
   <script>
     // ========== CONFIG ==========
-    // Replace this with your Apps Script web app URL if accessing via GitHub Pages
-    // Example: const BACKEND_URL = "https://script.google.com/macros/s/AKfycbz.../exec";
-    const BACKEND_URL = ""; // Empty because we're serving from the same script
+    const BACKEND_URL = "https://script.google.com/macros/s/AKfycbwqTUOClKjPAkZlYvsiEov4uvLNW2K2JRwg0ZOugITi5rDPN1TivOFPDtARAKLFwhpW/exec";
     // ============================
     
     // Authentication state
@@ -446,103 +444,43 @@
     let currentEventId = null;
 
     // === AUTHENTICATION ===
-    async function checkAuthentication() {
-      try {
-        const response = await fetch('?method=checkAuth');
-        const data = await response.json();
-        
-        if (data.authenticated) {
-          isAuthenticated = true;
+    function checkAuthentication() {
+      return fetch(BACKEND_URL + '?method=checkAuth')
+        .then(response => response.json())
+        .then(data => {
+          isAuthenticated = data.authenticated;
           currentUserEmail = data.userEmail;
-          return true;
-        } else {
-          // For GitHub Pages access, show manual login option
-          if (window.location.hostname.includes('github.io')) {
-            showManualLoginOption();
+          
+          if (!isAuthenticated) {
+            // Show unauthorized message
+            document.body.innerHTML = `
+              <div style="display: flex; justify-content: center; align-items: center; height: 100vh; flex-direction: column; font-family: Arial, sans-serif;">
+                <div style="background: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.1); text-align: center; max-width: 400px;">
+                  <h2 style="color: #dc3545; margin-bottom: 20px;">🔒 Access Restricted</h2>
+                  <p style="color: #666; margin-bottom: 20px;">This application is restricted to authorized faculty members only.</p>
+                  <p style="color: #888; font-size: 14px;">Current user: ${currentUserEmail || 'Not logged in'}</p>
+                  <p style="color: #888; font-size: 14px; margin-top: 10px;">Please contact your administrator for access.</p>
+                </div>
+              </div>
+            `;
             return false;
           }
-          isAuthenticated = false;
-          currentUserEmail = null;
-          return false;
-        }
-      } catch (error) {
-        console.error('Authentication check failed:', error);
-        // For GitHub Pages access, show manual login option
-        if (window.location.hostname.includes('github.io')) {
-          showManualLoginOption();
-          return false;
-        }
-        isAuthenticated = false;
-        return false;
-      }
-    }
-
-    // Show manual login option for GitHub Pages
-    function showManualLoginOption() {
-      document.body.innerHTML = `
-        <div style="font-family: Arial, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: #f5f5f5;">
-          <div style="background: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.1); text-align: center; max-width: 400px;">
-            <h2 style="color: #dc3545; margin-bottom: 20px; font-size: 24px;">🔒 Access Required</h2>
-            <p style="color: #666; margin-bottom: 20px; line-height: 1.6;">This application requires Google authentication.</p>
-            <div style="margin: 20px 0;">
-              <button onclick="openDirectApp()" style="background: #1a73e8; color: white; padding: 12px 24px; border: none; border-radius: 6px; font-size: 16px; cursor: pointer;">
-                Open Direct App
-              </button>
-            </div>
-            <p style="color: #666; font-size: 14px;">Or contact: prajyot.patil@gcsanquelim.ac.in</p>
-          </div>
-        </div>
-      `;
-    }
-
-    // Open the direct Apps Script URL
-    function openDirectApp() {
-      // Replace 'YOUR_SCRIPT_ID' with your actual Apps Script deployment URL
-      // To get this URL: 
-      // 1. Go to your Apps Script project
-      // 2. Click "Deploy" > "New deployment"
-      // 3. Copy the Web app URL
-      const scriptUrl = 'https://script.google.com/macros/s/AKfycbxndQ-ufGsxe8MWk5z4I7MCtUzakyOPjtteMApxDUzj9TBYoyeiAPm7o8foJtVWJMul/exec';
-      alert('Please replace YOUR_SCRIPT_ID with your actual Apps Script deployment URL in the code');
-      window.open(scriptUrl, '_blank');
-    }
-
-    // Check authentication before any API call
-    async function checkAuthBeforeRequest() {
-      if (!isAuthenticated) {
-        const isAuth = await checkAuthentication();
-        if (!isAuth) {
-          showAccessDenied();
-          return false;
-        }
-      }
-      return true;
-    }
-
-    // Initialize authentication on page load
-    async function initializeApp() {
-      const isAuth = await checkAuthentication();
-      if (isAuth) {
-        showPage('events');
-        setNavActive(0);
-        loadEvents();
-      } else {
-        // Show access denied message
-        document.body.innerHTML = `
-          <div style="font-family: Arial, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: #f5f5f5;">
-            <div style="background: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.1); text-align: center; max-width: 400px;">
-              <h2 style="color: #dc3545; margin-bottom: 20px; font-size: 24px;">🔒 Access Restricted</h2>
-              <p style="color: #666; margin-bottom: 20px; line-height: 1.6;">This application is restricted to authorized faculty members only.</p>
-              <div style="color: #888; font-size: 14px; background: #f8f9fa; padding: 10px; border-radius: 6px; margin: 15px 0;">
-                <strong>Current User:</strong><br>
-                ${currentUserEmail || 'Not logged in'}
+          return true;
+        })
+        .catch(err => {
+          console.error('Authentication check failed:', err);
+          // Show error message
+          document.body.innerHTML = `
+            <div style="display: flex; justify-content: center; align-items: center; height: 100vh; flex-direction: column; font-family: Arial, sans-serif;">
+              <div style="background: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.1); text-align: center; max-width: 400px;">
+                <h2 style="color: #dc3545; margin-bottom: 20px;">⚠️ Authentication Error</h2>
+                <p style="color: #666; margin-bottom: 20px;">Unable to verify your credentials.</p>
+                <p style="color: #888; font-size: 14px;">Please try refreshing the page or contact support.</p>
               </div>
-              <p style="color: #666; margin-bottom: 20px;">Please contact your administrator to request access.</p>
-              <p style="color: #1a73e8; font-weight: 500;">Contact: prajyot.patil@gcsanquelim.ac.in</p>
             </div>
-          </div>
-        `;
-      }
+          `;
+          return false;
+        });
     }
 
     // === NAVIGATION ===
@@ -564,41 +502,11 @@
     }
 
     // === EVENT LIST ===
-    async function loadEvents() {
-      if (!(await checkAuthBeforeRequest())) return;
-      
-      fetch('?method=getEvents')
+    function loadEvents() {
+      fetch(BACKEND_URL + '?method=getEvents')
         .then(response => response.json())
-        .then(data => {
-          if (data.status === 'error' && data.authenticated === false) {
-            // Authentication failed - show access denied
-            showAccessDenied();
-            return;
-          }
-          displayEvents(Array.isArray(data) ? data : []);
-        })
-        .catch(err => {
-          console.error('Error loading events:', err);
-          alert('Error loading events: ' + err);
-        });
-    }
-
-    // Show access denied message
-    function showAccessDenied() {
-      document.body.innerHTML = `
-        <div style="font-family: Arial, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: #f5f5f5;">
-          <div style="background: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.1); text-align: center; max-width: 400px;">
-            <h2 style="color: #dc3545; margin-bottom: 20px; font-size: 24px;">🔒 Access Restricted</h2>
-            <p style="color: #666; margin-bottom: 20px; line-height: 1.6;">This application is restricted to authorized faculty members only.</p>
-            <div style="color: #888; font-size: 14px; background: #f8f9fa; padding: 10px; border-radius: 6px; margin: 15px 0;">
-              <strong>Current User:</strong><br>
-              ${currentUserEmail || 'Not logged in'}
-            </div>
-            <p style="color: #666; margin-bottom: 20px;">Please contact your administrator to request access.</p>
-            <p style="color: #1a73e8; font-weight: 500;">Contact: prajyot.patil@gcsanquelim.ac.in</p>
-          </div>
-        </div>
-      `;
+        .then(events => displayEvents(Array.isArray(events) ? events : []))
+        .catch(err => alert('Error loading events: ' + err));
     }
     function displayEvents(events) {
       const eventList = document.getElementById('eventList');
@@ -672,24 +580,20 @@
         }
       }
     }
-    async function editEvent(eventId) {
-      if (!(await checkAuthBeforeRequest())) return;
-      
-      fetch('?method=getEventById&eventId=' + encodeURIComponent(eventId))
+    function editEvent(eventId) {
+      fetch(BACKEND_URL + '?method=getEventById&eventId=' + encodeURIComponent(eventId))
         .then(res => res.json())
         .then(eventObj => showCreateEventPage(true, eventObj))
         .catch(err => alert('Error: ' + err));
     }
-    async function deleteEvent(eventId) {
-      if (!(await checkAuthBeforeRequest())) return;
-      
+    function deleteEvent(eventId) {
       console.log('deleteEvent called with eventId:', eventId);
       if (!confirm('Are you sure you want to delete this event?')) return;
       const formData = new URLSearchParams();
       formData.append('action', 'deleteEvent');
       formData.append('eventId', eventId);
 
-      fetch('', {
+      fetch(BACKEND_URL, {
         method: "POST",
         body: formData
       })
@@ -706,8 +610,6 @@
     }
     async function handleFormSubmit(e) {
       e.preventDefault();
-      if (!(await checkAuthBeforeRequest())) return;
-      
       const form = document.getElementById('eventForm');
       const isEdit = form.editMode.value === "true";
 
@@ -740,7 +642,7 @@
       formData.append('nssHours', form.nssHours.value);
       formData.append('geotaggedPhoto', geotaggedPhotoUrl);
 
-      fetch('', {
+      fetch(BACKEND_URL, {
         method: "POST",
         body: formData
       })
@@ -764,9 +666,7 @@
     }
 
     // === ATTENDANCE ===
-    async function loadAttendanceList() {
-      if (!(await checkAuthBeforeRequest())) return;
-      
+    function loadAttendanceList() {
       const list = document.getElementById('attendanceEventList');
       // Show loading state
       list.innerHTML = '<div class="attendance-card loading-card">Loading attendance records...</div>';
@@ -777,7 +677,7 @@
       );
       
       Promise.race([
-        fetch('?method=getAllAttendanceData'),
+        fetch(BACKEND_URL + '?method=getAllAttendanceData'),
         timeoutPromise
       ])
         .then(response => response.json())
@@ -799,7 +699,7 @@
     }
     // Fetch present students for an event from the matrix
     function fetchPresentStudents(eventId, callback) {
-      fetch('?method=getPresentStudentsMatrix&eventId=' + encodeURIComponent(eventId))
+      fetch(BACKEND_URL + '?method=getPresentStudentsMatrix&eventId=' + encodeURIComponent(eventId))
         .then(res => res.json())
         .then(data => {
           if (Array.isArray(data)) {
@@ -892,7 +792,7 @@
       document.getElementById('attendanceEventIdReadonlyField').style.display = 'none';
       const form = document.getElementById('attendanceForm');
       form.attendanceEventId.setAttribute('required', 'required');
-      fetch('?method=getAllEventIds')
+      fetch(BACKEND_URL + '?method=getAllEventIds')
         .then(res => res.json())
         .then(eventIds => {
           const select = form.attendanceEventId;
@@ -955,7 +855,7 @@
       formData.append('eventId', eventId);
       formData.append('presentEnrollmentNumbers', JSON.stringify(presentStudentsArr));
       
-      fetch('', {
+      fetch(BACKEND_URL, {
         method: "POST",
         body: formData
       })
@@ -995,7 +895,7 @@
       formData.append('eventId', eventId);
       formData.append('presentEnrollmentNumbers', JSON.stringify([])); // Empty array clears all attendance
       
-      fetch('', {
+      fetch(BACKEND_URL, {
         method: "POST",
         body: formData
       })
@@ -1021,7 +921,7 @@
       // Get the current present students as an array
       const present = document.querySelector('input[name="presentStudents"]').value
         .split(',').map(s => s.trim()).filter(Boolean);
-      fetch('?method=getAllEnrollmentNumbers')
+      fetch(BACKEND_URL + '?method=getAllEnrollmentNumbers')
         .then(res => res.json())
         .then(enrollmentNumbers => {
           const list = document.getElementById('studentCheckboxList');
@@ -1071,32 +971,18 @@
     // === UI EVENT HOOKS ===
     document.addEventListener('DOMContentLoaded', function() {
       // Navigation
-      document.getElementById('navEvents').addEventListener('click', async () => {
-        showPage('events'); setNavActive(0); await loadEvents();
+      document.getElementById('navEvents').addEventListener('click', () => {
+        showPage('events'); setNavActive(0); loadEvents();
       });
-      document.getElementById('navAttendance').addEventListener('click', async () => {
-        showPage('attendance'); setNavActive(1); await loadAttendanceList();
+      document.getElementById('navAttendance').addEventListener('click', () => {
+        showPage('attendance'); setNavActive(1); loadAttendanceList();
       });
       // FABs
-      document.getElementById('addEventBtn').addEventListener('click', async () => {
-        if (await checkAuthBeforeRequest()) {
-          showCreateEventPage(false, null);
-        }
-      });
-      document.getElementById('addAttendanceBtn').addEventListener('click', async () => {
-        if (await checkAuthBeforeRequest()) {
-          openAttendanceForm();
-        }
-      });
+      document.getElementById('addEventBtn').addEventListener('click', () => showCreateEventPage(false, null));
+      document.getElementById('addAttendanceBtn').addEventListener('click', openAttendanceForm);
       // Cancel buttons
-      document.getElementById('cancelFormBtn').addEventListener('click', async () => { 
-        showPage('events'); 
-        await loadEvents(); 
-      });
-      document.getElementById('cancelAttendanceFormBtn').addEventListener('click', async () => { 
-        showPage('attendance'); 
-        await loadAttendanceList(); 
-      });
+      document.getElementById('cancelFormBtn').addEventListener('click', () => { showPage('events'); loadEvents(); });
+      document.getElementById('cancelAttendanceFormBtn').addEventListener('click', () => { showPage('attendance'); loadAttendanceList(); });
       // Form submits
       document.getElementById('eventForm').addEventListener('submit', handleFormSubmit);
       document.getElementById('attendanceForm').addEventListener('submit', handleAttendanceFormSubmit);
@@ -1132,8 +1018,13 @@
       document.getElementById('studentModal').addEventListener('click', function(e) {
         if (e.target === this) this.style.display = 'none';
       });
-      // Initial load: check authentication and show events
-      initializeApp();
+      // Check authentication first, then load the app
+      checkAuthentication().then(authenticated => {
+        if (authenticated) {
+          // Initial load: show events
+          showPage('events'); setNavActive(0); loadEvents();
+        }
+      });
     });
 
     // Event Summary Modal logic
@@ -1171,7 +1062,7 @@
           formData.append("mimeType", file.type);
           formData.append("base64", base64);
 
-          fetch('', {
+          fetch(BACKEND_URL, {
             method: "POST",
             body: formData
           })
