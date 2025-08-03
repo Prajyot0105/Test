@@ -433,7 +433,7 @@
 
   <script>
     // ========== CONFIG ==========
-    const BACKEND_URL = "https://script.google.com/macros/s/AKfycbzaYcx_YSMTSavgdmOQQUhT1iZPbeRjSyenM0Nu6k8MLjeUPqt6tNYr1n5iTFR09NAi/exec";
+    const BACKEND_URL = "https://script.google.com/macros/s/AKfycbwm5b0Eh_9FmIU2vfFirxrxOQTE2kADE0FEkwyFRh8_jtuA6JXwDPhyzRUi7em2EX4x/exec";
     // ============================
 
     let isEditMode = false;
@@ -774,7 +774,7 @@
         showPage('attendanceForm');
       });
     }
-    // Use matrix model for attendance marking
+    // Use merge-based attendance marking for concurrent safety
     function handleAttendanceFormSubmit(e) {
       e.preventDefault();
       const form = document.getElementById('attendanceForm');
@@ -805,11 +805,12 @@
       submitBtn.disabled = true;
       submitBtn.textContent = 'Saving...';
       
-      // Use the new matrix API
+      // Use merge operation for concurrent safety
       const formData = new URLSearchParams();
-      formData.append('action', 'markAttendanceMatrix');
+      formData.append('action', 'markAttendanceMerge');
       formData.append('eventId', eventId);
       formData.append('presentEnrollmentNumbers', JSON.stringify(presentStudentsArr));
+      formData.append('operation', isEdit ? 'replace' : 'add'); // 'add' for new, 'replace' for edit
       
       fetch(BACKEND_URL, {
         method: "POST",
@@ -818,7 +819,7 @@
       .then(res => res.json())
       .then(res => {
         if (res.status === "success") {
-          alert("Attendance saved successfully!");
+          alert(`Attendance saved successfully! Final count: ${res.finalPresent.length} students`);
           showPage('attendance');
           loadAttendanceList();
         } else {
