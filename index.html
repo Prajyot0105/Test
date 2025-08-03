@@ -433,7 +433,7 @@
 
   <script>
     // ========== CONFIG ==========
-    const BACKEND_URL = "https://script.google.com/macros/s/AKfycbxdbszuJfEEW2O5LX3ex7ij8N3rxKdTr8hgPhvmw9g4QmFjqEexRaT5nHmcWApfndtI/exec";
+    const BACKEND_URL = "https://script.google.com/macros/s/AKfycbxhT5RDr9-gcvLYom_-eV_hC_7jbsvmkPUC8bqQKu6JgfaHfnksbMO3ciNTMVVbXk1x/exec";
     // ============================
     
     let isEditMode = false;
@@ -846,9 +846,12 @@
               message += `📊 Summary:\n`;
               message += `• Existing students: ${res.existingCount}\n`;
               message += `• New students added: ${res.newCount}\n`;
+              message += `• Actually newly added: ${res.newlyAddedCount || 0}\n`;
               message += `• Total present: ${res.totalPresent}\n`;
-              message += `• Merge operation: ${res.merged ? 'Yes' : 'No'}\n\n`;
-              message += `💡 Note: Your attendance was merged with existing data to prevent conflicts.`;
+              if (res.newlyAddedStudents && res.newlyAddedStudents.length > 0) {
+                message += `• Newly added: ${res.newlyAddedStudents.join(', ')}\n`;
+              }
+              message += `\n💡 Note: Your attendance was merged with existing data to prevent conflicts.`;
               alert(message);
             } else {
               alert("✅ Attendance saved successfully!");
@@ -888,11 +891,10 @@
       const originalContent = list.innerHTML;
       list.innerHTML = '<div class="attendance-card loading-card">Deleting attendance...</div>';
       
-      // Clear all attendance for this event by setting all values to empty
+      // Use the new deleteAttendanceMatrix action
       const formData = new URLSearchParams();
-      formData.append('action', 'markAttendanceMatrix');
+      formData.append('action', 'deleteAttendanceMatrix');
       formData.append('eventId', eventId);
-      formData.append('presentEnrollmentNumbers', JSON.stringify([])); // Empty array clears all attendance
       
       fetch(BACKEND_URL, {
         method: "POST",
