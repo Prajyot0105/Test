@@ -433,7 +433,7 @@
 
   <script>
     // ========== CONFIG ==========
-    const BACKEND_URL = "https://script.google.com/macros/s/AKfycbwm5b0Eh_9FmIU2vfFirxrxOQTE2kADE0FEkwyFRh8_jtuA6JXwDPhyzRUi7em2EX4x/exec";
+    const BACKEND_URL = "https://script.google.com/macros/s/AKfycbwsjsMJ82MprrNvwk52ZHouvNCuVqLZqQiiHfJFv6uMNDJodHe5OmU_tQjdv1-1oC60/exec";
     // ============================
 
     let isEditMode = false;
@@ -819,7 +819,10 @@
       .then(res => res.json())
       .then(res => {
         if (res.status === "success") {
-          alert(`Attendance saved successfully! Final count: ${res.finalPresent.length} students`);
+          const message = res.finalPresent ? 
+            `Attendance saved successfully! Final count: ${res.finalPresent.length} students` :
+            "Attendance saved successfully!";
+          alert(message);
           showPage('attendance');
           loadAttendanceList();
         } else {
@@ -828,7 +831,7 @@
       })
       .catch(err => {
         console.error('Error saving attendance:', err);
-        alert('Error saving attendance. Please try again.');
+        alert('Error saving attendance. Please try again. If the problem persists, try refreshing the page.');
       })
       .finally(() => {
         // Reset button state
@@ -848,9 +851,10 @@
       
       // Clear all attendance for this event by setting all values to empty
       const formData = new URLSearchParams();
-      formData.append('action', 'markAttendanceMatrix');
+      formData.append('action', 'markAttendanceMerge');
       formData.append('eventId', eventId);
       formData.append('presentEnrollmentNumbers', JSON.stringify([])); // Empty array clears all attendance
+      formData.append('operation', 'replace'); // Replace with empty array to clear all
       
       fetch(BACKEND_URL, {
         method: "POST",
