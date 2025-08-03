@@ -433,7 +433,7 @@
 
   <script>
     // ========== CONFIG ==========
-    const BACKEND_URL = "https://script.google.com/macros/s/AKfycbyIqHWC4b9HSdjMGM3UBZOcoVaNCHnb8BihcNYzGnaypqBvfNfeZ7Zar-KSTg76K6JR/exec";
+    const BACKEND_URL = "https://script.google.com/macros/s/AKfycbxdbszuJfEEW2O5LX3ex7ij8N3rxKdTr8hgPhvmw9g4QmFjqEexRaT5nHmcWApfndtI/exec";
     // ============================
     
     let isEditMode = false;
@@ -805,9 +805,10 @@
       submitBtn.disabled = true;
       submitBtn.textContent = 'Saving...';
       
-      // Use the new matrix API
+      // Use the appropriate API based on whether we're creating or editing
       const formData = new URLSearchParams();
-      formData.append('action', 'markAttendanceMatrix');
+      const action = isEdit ? 'updateAttendanceMatrix' : 'markAttendanceMatrix';
+      formData.append('action', action);
       formData.append('eventId', eventId);
       formData.append('presentEnrollmentNumbers', JSON.stringify(presentStudentsArr));
       
@@ -818,20 +819,58 @@
       .then(res => res.json())
       .then(res => {
         if (res.status === "success") {
-          if (res.merged) {
-            alert(`Attendance saved successfully! ${res.totalPresent} students marked present (merged with existing data).`);
+          if (isEdit) {
+            // Handle editing response
+            if (res.updated) {
+              let message = `✅ Attendance updated successfully!\n\n`;
+              message += `📊 Summary:\n`;
+              message += `• Previous students: ${res.previousCount}\n`;
+              message += `• Current students: ${res.newCount}\n`;
+              message += `• Students removed: ${res.removedCount}\n`;
+              message += `• Students added: ${res.addedCount}\n`;
+              if (res.removedStudents && res.removedStudents.length > 0) {
+                message += `• Removed: ${res.removedStudents.join(', ')}\n`;
+              }
+              if (res.addedStudents && res.addedStudents.length > 0) {
+                message += `• Added: ${res.addedStudents.join(', ')}\n`;
+              }
+              message += `\n💡 Note: Attendance was updated with your changes.`;
+              alert(message);
+            } else {
+              alert("✅ Attendance updated successfully!");
+            }
           } else {
-            alert("Attendance saved successfully!");
+            // Handle creating response
+            if (res.merged) {
+              let message = `✅ Attendance merged successfully!\n\n`;
+              message += `📊 Summary:\n`;
+              message += `• Existing students: ${res.existingCount}\n`;
+              message += `• New students added: ${res.newCount}\n`;
+              message += `• Total present: ${res.totalPresent}\n`;
+              message += `• Merge operation: ${res.merged ? 'Yes' : 'No'}\n\n`;
+              message += `💡 Note: Your attendance was merged with existing data to prevent conflicts.`;
+              alert(message);
+            } else {
+              alert("✅ Attendance saved successfully!");
+            }
           }
           showPage('attendance');
           loadAttendanceList();
         } else {
-          alert(res.error || "Failed to save attendance.");
+          alert("❌ " + (res.error || "Failed to save attendance."));
         }
       })
       .catch(err => {
         console.error('Error saving attendance:', err);
-        alert('Error saving attendance. Please try again.');
+        let errorMessage = 'Error saving attendance. ';
+        
+        if (err.message && err.message.includes('System is busy')) {
+          errorMessage += 'The system is currently busy. Please wait a few seconds and try again.';
+        } else {
+          errorMessage += 'Please try again.';
+        }
+        
+        alert('❌ ' + errorMessage);
       })
       .finally(() => {
         // Reset button state
