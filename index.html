@@ -435,53 +435,9 @@
     // ========== CONFIG ==========
     const BACKEND_URL = "https://script.google.com/macros/s/AKfycbzaYcx_YSMTSavgdmOQQUhT1iZPbeRjSyenM0Nu6k8MLjeUPqt6tNYr1n5iTFR09NAi/exec";
     // ============================
-    
-    // Authentication state
-    let isAuthenticated = false;
-    let currentUserEmail = null;
 
     let isEditMode = false;
     let currentEventId = null;
-
-    // === AUTHENTICATION ===
-    function checkAuthentication() {
-      return fetch(BACKEND_URL + '?method=checkAuth')
-        .then(response => response.json())
-        .then(data => {
-          isAuthenticated = data.authenticated;
-          currentUserEmail = data.userEmail;
-          
-          if (!isAuthenticated) {
-            // Show unauthorized message
-            document.body.innerHTML = `
-              <div style="display: flex; justify-content: center; align-items: center; height: 100vh; flex-direction: column; font-family: Arial, sans-serif;">
-                <div style="background: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.1); text-align: center; max-width: 400px;">
-                  <h2 style="color: #dc3545; margin-bottom: 20px;">🔒 Access Restricted</h2>
-                  <p style="color: #666; margin-bottom: 20px;">This application is restricted to authorized faculty members only.</p>
-                  <p style="color: #888; font-size: 14px;">Current user: ${currentUserEmail || 'Not logged in'}</p>
-                  <p style="color: #888; font-size: 14px; margin-top: 10px;">Please contact your administrator for access.</p>
-                </div>
-              </div>
-            `;
-            return false;
-          }
-          return true;
-        })
-        .catch(err => {
-          console.error('Authentication check failed:', err);
-          // Show error message
-          document.body.innerHTML = `
-            <div style="display: flex; justify-content: center; align-items: center; height: 100vh; flex-direction: column; font-family: Arial, sans-serif;">
-              <div style="background: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.1); text-align: center; max-width: 400px;">
-                <h2 style="color: #dc3545; margin-bottom: 20px;">⚠️ Authentication Error</h2>
-                <p style="color: #666; margin-bottom: 20px;">Unable to verify your credentials.</p>
-                <p style="color: #888; font-size: 14px;">Please try refreshing the page or contact support.</p>
-              </div>
-            </div>
-          `;
-          return false;
-        });
-    }
 
     // === NAVIGATION ===
     function showPage(page) {
@@ -1018,13 +974,8 @@
       document.getElementById('studentModal').addEventListener('click', function(e) {
         if (e.target === this) this.style.display = 'none';
       });
-      // Check authentication first, then load the app
-      checkAuthentication().then(authenticated => {
-        if (authenticated) {
-          // Initial load: show events
-          showPage('events'); setNavActive(0); loadEvents();
-        }
-      });
+      // Initial load: show events
+      showPage('events'); setNavActive(0); loadEvents();
     });
 
     // Event Summary Modal logic
