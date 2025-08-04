@@ -433,7 +433,7 @@
 
   <script>
     // ========== CONFIG ==========
-    const BACKEND_URL = "https://script.google.com/macros/s/AKfycbxG14gWiPGmQHnUhbsBc8uT6a95mnYghdOBAghbBKc7seAjBeiNBmTSC9kXAjJ7MF96/exec";
+    const BACKEND_URL = "https://script.google.com/macros/s/AKfycbxShypfSbsCDy3nsbf7IQ4EM_T5ZouDVQJCvVGsonpKe1dOlSIKOMgKwpcEvvI-Q03Q/exec";
     // ============================
 
     let isEditMode = false;
@@ -493,7 +493,6 @@
           showEventSummaryModal(event);
         });
         eventCard.querySelector('.delete-btn').addEventListener('click', () => {
-          console.log('Event delete button clicked for:', event.eventId);
           deleteEvent(event.eventId);
         });
         eventCard.querySelector('.edit-btn').addEventListener('click', () => editEvent(event.eventId));
@@ -543,7 +542,6 @@
         .catch(err => alert('Error: ' + err));
     }
     function deleteEvent(eventId) {
-      console.log('deleteEvent called with eventId:', eventId);
       if (!confirm('Are you sure you want to delete this event?')) return;
       const formData = new URLSearchParams();
       formData.append('action', 'deleteEvent');
@@ -629,7 +627,7 @@
       
       // Add timeout to prevent hanging requests
       const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Request timeout')), 15000)
+        setTimeout(() => reject(new Error('Request timeout')), 10000)
       );
       
       Promise.race([
@@ -645,7 +643,6 @@
           }
         })
         .catch(err => {
-          console.error('Error loading attendance:', err);
           if (err.message === 'Request timeout') {
             list.innerHTML = '<div class="attendance-card error-card">Request timed out. Please try again.</div>';
           } else {
@@ -692,11 +689,9 @@
         
         // Add event listeners for edit and delete
         card.querySelector('.edit-btn').addEventListener('click', () => {
-          console.log('Edit button clicked for event:', item.eventId);
           openAttendanceFormForEdit(item.eventId);
         });
         card.querySelector('.delete-btn').addEventListener('click', () => {
-          console.log('Delete button clicked for event:', item.eventId);
           deleteAttendanceRecord(item.eventId);
         });
         
@@ -730,11 +725,9 @@
           
           // Add event listeners for edit and delete
           card.querySelector('.edit-btn').addEventListener('click', () => {
-            console.log('Edit button clicked for event:', eventId);
             openAttendanceFormForEdit(eventId);
           });
           card.querySelector('.delete-btn').addEventListener('click', () => {
-            console.log('Delete button clicked for event:', eventId);
             deleteAttendanceRecord(eventId);
           });
           
@@ -810,6 +803,7 @@
       formData.append('action', 'markAttendanceMatrix');
       formData.append('eventId', eventId);
       formData.append('presentEnrollmentNumbers', JSON.stringify(presentStudentsArr));
+      formData.append('operation', isEdit ? 'replace' : 'merge'); // 'merge' for new, 'replace' for edit
       
       fetch(BACKEND_URL, {
         method: "POST",
@@ -829,7 +823,6 @@
         }
       })
       .catch(err => {
-        console.error('Error saving attendance:', err);
         alert('Error saving attendance. Please try again.');
       })
       .finally(() => {
@@ -853,6 +846,7 @@
       formData.append('action', 'markAttendanceMatrix');
       formData.append('eventId', eventId);
       formData.append('presentEnrollmentNumbers', JSON.stringify([])); // Empty array clears all attendance
+      formData.append('operation', 'replace'); // Replace with empty array to clear all
       
       fetch(BACKEND_URL, {
         method: "POST",
@@ -869,7 +863,6 @@
         }
       })
       .catch(err => {
-        console.error('Error deleting attendance:', err);
         alert('Error deleting attendance. Please try again.');
         list.innerHTML = originalContent; // Restore original content on error
       });
