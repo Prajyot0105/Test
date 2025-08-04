@@ -303,6 +303,17 @@
       padding: 20px;
       font-weight: 500;
     }
+    
+    /* Performance optimizations */
+    .event-card, .attendance-card {
+      will-change: transform;
+      transform: translateZ(0);
+    }
+    
+    /* Smooth transitions */
+    .event-card, .attendance-card, .form-container {
+      transition: all 0.2s ease-in-out;
+    }
   </style>
 </head>
 <body>
@@ -433,7 +444,7 @@
 
   <script>
     // ========== CONFIG ==========
-    const BACKEND_URL = "https://script.google.com/macros/s/AKfycbxShypfSbsCDy3nsbf7IQ4EM_T5ZouDVQJCvVGsonpKe1dOlSIKOMgKwpcEvvI-Q03Q/exec";
+    const BACKEND_URL = "https://script.google.com/macros/s/AKfycbwHmalQ7LUb0WtjOQFmur-tI4tY2AvUbSG9hNSAjPCfe7GA3vkMCHKJldyUuoti9Dg/exec";
     // ============================
 
     let isEditMode = false;
@@ -459,10 +470,30 @@
 
     // === EVENT LIST ===
     function loadEvents() {
-      fetch(BACKEND_URL + '?method=getEvents')
+      const eventList = document.getElementById('eventList');
+      // Show loading state
+      eventList.innerHTML = '<div class="event-card loading-card">Loading events...</div>';
+      
+      // Add timeout to prevent hanging requests
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Request timeout')), 8000)
+      );
+      
+      Promise.race([
+        fetch(BACKEND_URL + '?method=getEvents'),
+        timeoutPromise
+      ])
         .then(response => response.json())
-        .then(events => displayEvents(Array.isArray(events) ? events : []))
-        .catch(err => alert('Error loading events: ' + err));
+        .then(events => {
+          displayEvents(Array.isArray(events) ? events : []);
+        })
+        .catch(err => {
+          if (err.message === 'Request timeout') {
+            eventList.innerHTML = '<div class="event-card error-card">Request timed out. Please try again.</div>';
+          } else {
+            eventList.innerHTML = '<div class="event-card error-card">Error loading events. Please try again.</div>';
+          }
+        });
     }
     function displayEvents(events) {
       const eventList = document.getElementById('eventList');
@@ -672,6 +703,9 @@
         return;
       }
       
+      // Use DocumentFragment for better performance with large datasets
+      const fragment = document.createDocumentFragment();
+      
       // Create all cards at once (no async calls needed)
       attendanceData.forEach(item => {
         const card = document.createElement('div');
@@ -695,8 +729,11 @@
           deleteAttendanceRecord(item.eventId);
         });
         
-        list.appendChild(card);
+        fragment.appendChild(card);
       });
+      
+      // Append all cards at once for better performance
+      list.appendChild(fragment);
     }
 
     // Display attendance list using matrix model (legacy version - kept for compatibility)
@@ -893,6 +930,19 @@
         });
     }
 
+    // Debounced search function for better performance
+    let searchTimeout;
+    function debouncedSearch(searchInput, callback) {
+      clearTimeout(searchTimeout);
+      searchTimeout = setTimeout(() => {
+        const search = searchInput.value.toLowerCase();
+        Array.from(document.querySelectorAll('#studentCheckboxList label')).forEach(label => {
+          const text = label.textContent.toLowerCase();
+          label.parentElement.style.display = text.includes(search) ? '' : 'none';
+        });
+      }, 300); // 300ms delay
+    }
+
     // === PHOTO PREVIEW ===
     document.addEventListener('DOMContentLoaded', function() {
       // Show/hide photo previews for multiple files
@@ -960,11 +1010,7 @@
         document.querySelector('input[name="presentStudents"]').value = '';
       });
       document.getElementById('studentSearch').addEventListener('input', function() {
-        const search = this.value.toLowerCase();
-        Array.from(document.querySelectorAll('#studentCheckboxList label')).forEach(label => {
-          const text = label.textContent.toLowerCase();
-          label.parentElement.style.display = text.includes(search) ? '' : 'none';
-        });
+        debouncedSearch(this, function() {}); // Call debouncedSearch with a dummy callback
       });
       // Hide modal if click outside
       document.getElementById('studentModal').addEventListener('click', function(e) {
