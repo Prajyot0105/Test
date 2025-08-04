@@ -433,7 +433,7 @@
 
   <script>
     // ========== CONFIG ==========
-    const BACKEND_URL = "https://script.google.com/macros/s/AKfycbyuUQtg5JFTQy-gm9I73p_qeBhlxdoDrocvpGYN_FLB7AhLwUHDydg7sVtEXAZerwLo/exec";
+    const BACKEND_URL = "https://script.google.com/macros/s/AKfycbxG14gWiPGmQHnUhbsBc8uT6a95mnYghdOBAghbBKc7seAjBeiNBmTSC9kXAjJ7MF96/exec";
     // ============================
 
     let isEditMode = false;
@@ -633,13 +633,13 @@
       );
       
       Promise.race([
-        fetch(BACKEND_URL + '?method=getAttendanceRecords'),
+        fetch(BACKEND_URL + '?method=getAllAttendanceData'),
         timeoutPromise
       ])
         .then(response => response.json())
         .then(data => {
-          if (data && data.length > 0) {
-            displayAttendanceListSimple(data);
+          if (data.eventsWithAttendance && data.eventsWithAttendance.length > 0) {
+            displayAttendanceListOptimized(data.eventsWithAttendance);
           } else {
             list.innerHTML = '<div class="attendance-card">No attendance records found.</div>';
           }
@@ -653,21 +653,17 @@
           }
         });
     }
-    // Fetch present students for an event from the attendance sheet
+    // Fetch present students for an event from the matrix
     function fetchPresentStudents(eventId, callback) {
-      fetch(BACKEND_URL + '?method=getAttendanceRecord&eventId=' + encodeURIComponent(eventId))
+      fetch(BACKEND_URL + '?method=getPresentStudentsMatrix&eventId=' + encodeURIComponent(eventId))
         .then(res => res.json())
         .then(data => {
-          if (data && data.presentStudents) {
-            const presentStudents = data.presentStudents.split(',').map(s => s.trim()).filter(Boolean);
-            callback(presentStudents);
+          if (Array.isArray(data)) {
+            callback(data); // data is an array of enrollment numbers
           } else {
+            alert(data.error || "Failed to fetch present students.");
             callback([]);
           }
-        })
-        .catch(err => {
-          console.error('Error fetching present students:', err);
-          callback([]);
         });
     }
     // Display attendance list using matrix model (optimized version)
@@ -746,48 +742,6 @@
         });
       });
     }
-    // Display attendance list using simple attendance sheet
-    function displayAttendanceListSimple(attendanceData) {
-      const list = document.getElementById('attendanceEventList');
-      list.innerHTML = '';
-      if (!attendanceData.length) {
-        list.innerHTML = '<div class="attendance-card">No attendance records found.</div>';
-        return;
-      }
-      
-      // Create all cards at once
-      attendanceData.forEach(item => {
-        const card = document.createElement('div');
-        card.className = 'attendance-card';
-        
-        // Parse present students from the attendance record
-        const presentStudents = item.presentStudents ? 
-          item.presentStudents.split(',').map(s => s.trim()).filter(Boolean) : [];
-        
-        card.innerHTML = `
-          <div class="attendance-info">
-            <div class="attendance-event-id">${item.eventId}</div>
-            <div class="attendance-event-name">${presentStudents.join(', ')}</div>
-          </div>
-          <div class="attendance-actions">
-            <button class="attendance-action-btn edit-btn" title="Edit Attendance">&#9998;</button>
-            <button class="attendance-action-btn delete-btn" title="Delete Attendance">&#128465;</button>
-          </div>
-        `;
-        
-        // Add event listeners for edit and delete
-        card.querySelector('.edit-btn').addEventListener('click', () => {
-          console.log('Edit button clicked for event:', item.eventId);
-          openAttendanceFormForEdit(item.eventId);
-        });
-        card.querySelector('.delete-btn').addEventListener('click', () => {
-          console.log('Delete button clicked for event:', item.eventId);
-          deleteAttendanceRecord(item.eventId);
-        });
-        
-        list.appendChild(card);
-      });
-    }
     function openAttendanceForm() {
       // Show dropdown, hide readonly field
       document.getElementById('attendanceEventIdDropdownField').style.display = 'block';
@@ -820,7 +774,7 @@
         showPage('attendanceForm');
       });
     }
-    // Use merge-based attendance marking for concurrent safety
+    // Use matrix model for attendance marking
     function handleAttendanceFormSubmit(e) {
       e.preventDefault();
       const form = document.getElementById('attendanceForm');
@@ -851,12 +805,11 @@
       submitBtn.disabled = true;
       submitBtn.textContent = 'Saving...';
       
-      // Use merge operation for concurrent safety
+      // Use the new matrix API
       const formData = new URLSearchParams();
-      formData.append('action', 'markAttendanceMergeSimple');
+      formData.append('action', 'markAttendanceMatrix');
       formData.append('eventId', eventId);
       formData.append('presentEnrollmentNumbers', JSON.stringify(presentStudentsArr));
-      formData.append('operation', isEdit ? 'replace' : 'add'); // 'add' for new, 'replace' for edit
       
       fetch(BACKEND_URL, {
         method: "POST",
@@ -877,7 +830,7 @@
       })
       .catch(err => {
         console.error('Error saving attendance:', err);
-        alert('Error saving attendance. Please try again. If the problem persists, try refreshing the page.');
+        alert('Error saving attendance. Please try again.');
       })
       .finally(() => {
         // Reset button state
@@ -897,10 +850,9 @@
       
       // Clear all attendance for this event by setting all values to empty
       const formData = new URLSearchParams();
-      formData.append('action', 'markAttendanceMergeSimple');
+      formData.append('action', 'markAttendanceMatrix');
       formData.append('eventId', eventId);
       formData.append('presentEnrollmentNumbers', JSON.stringify([])); // Empty array clears all attendance
-      formData.append('operation', 'replace'); // Replace with empty array to clear all
       
       fetch(BACKEND_URL, {
         method: "POST",
