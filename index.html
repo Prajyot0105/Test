@@ -6,6 +6,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <meta name="theme-color" content="#1a73e8">
   <title>NSS Event Manager</title>
+  
+  <!-- Preload critical resources -->
+  <link rel="preload" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" as="style">
+  <link rel="dns-prefetch" href="//script.google.com">
+  
+  <!-- Preconnect to external domains -->
+  <link rel="preconnect" href="https://script.google.com">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <style>
     html, body { height: auto; min-height: 100vh; overflow-x: auto; overflow-y: auto; }
     body {
@@ -308,11 +317,40 @@
     .event-card, .attendance-card {
       will-change: transform;
       transform: translateZ(0);
+      contain: layout style paint;
     }
     
     /* Smooth transitions */
     .event-card, .attendance-card, .form-container {
       transition: all 0.2s ease-in-out;
+    }
+    
+    /* Optimize for mobile */
+    @media (max-width: 768px) {
+      .event-card, .attendance-card {
+        contain: layout style;
+      }
+      
+      .form-container {
+        contain: layout;
+      }
+    }
+    
+    /* Reduce repaints */
+    .app-bar {
+      contain: layout style;
+    }
+    
+    /* Optimize images */
+    .event-img img {
+      image-rendering: -webkit-optimize-contrast;
+      image-rendering: crisp-edges;
+    }
+    
+    /* Fast scrolling */
+    .main-content {
+      -webkit-overflow-scrolling: touch;
+      scroll-behavior: smooth;
     }
   </style>
 </head>
@@ -444,8 +482,50 @@
 
   <script>
     // ========== CONFIG ==========
-    const BACKEND_URL = "https://script.google.com/macros/s/AKfycbwHmalQ7LUb0WtjOQFmur-tI4tY2AvUbSG9hNSAjPCfe7GA3vkMCHKJldyUuoti9Dg/exec";
+    const BACKEND_URL = "https://script.google.com/macros/s/AKfycbyL7I0Cd2xPTpX76bKNHnPRNCwDuhSKuLndpQ4O705mmgyB3RgY9szydrL3p62Owz45/exec";
     // ============================
+
+    // Service Worker for caching
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function() {
+        navigator.serviceWorker.register('/sw.js')
+          .then(function(registration) {
+            console.log('SW registered: ', registration);
+          })
+          .catch(function(registrationError) {
+            console.log('SW registration failed: ', registrationError);
+          });
+      });
+    }
+
+    // Cache API responses for better performance
+    const apiCache = new Map();
+    const CACHE_DURATION = 30000; // 30 seconds
+
+    async function cachedFetch(url, options = {}) {
+      const cacheKey = url + JSON.stringify(options);
+      const now = Date.now();
+      
+      // Check cache first
+      if (apiCache.has(cacheKey)) {
+        const cached = apiCache.get(cacheKey);
+        if (now - cached.timestamp < CACHE_DURATION) {
+          return cached.data;
+        }
+      }
+      
+      // Fetch fresh data
+      const response = await fetch(url, options);
+      const data = await response.json();
+      
+      // Cache the result
+      apiCache.set(cacheKey, {
+        data: data,
+        timestamp: now
+      });
+      
+      return data;
+    }
 
     let isEditMode = false;
     let currentEventId = null;
@@ -469,10 +549,26 @@
     }
 
     // === EVENT LIST ===
-    function loadEvents() {
+    let currentPage = 1;
+    let isLoading = false;
+    let hasMoreEvents = true;
+    
+    function loadEvents(page = 1, append = false) {
+      if (isLoading) return;
+      
+      isLoading = true;
       const eventList = document.getElementById('eventList');
-      // Show loading state
-      eventList.innerHTML = '<div class="event-card loading-card">Loading events...</div>';
+      
+      if (page === 1) {
+        // Show loading state for first page
+        eventList.innerHTML = '<div class="event-card loading-card">Loading events...</div>';
+      } else {
+        // Add loading indicator at bottom for pagination
+        const loadingIndicator = document.createElement('div');
+        loadingIndicator.className = 'event-card loading-card';
+        loadingIndicator.textContent = 'Loading more events...';
+        eventList.appendChild(loadingIndicator);
+      }
       
       // Add timeout to prevent hanging requests
       const timeoutPromise = new Promise((_, reject) => 
@@ -480,28 +576,61 @@
       );
       
       Promise.race([
-        fetch(BACKEND_URL + '?method=getEvents'),
+        fetch(BACKEND_URL + `?method=getEventsPaginated&page=${page}&pageSize=20`),
         timeoutPromise
       ])
         .then(response => response.json())
-        .then(events => {
-          displayEvents(Array.isArray(events) ? events : []);
+        .then(data => {
+          if (page === 1) {
+            displayEvents(data.events || []);
+          } else {
+            // Remove loading indicator
+            const loadingIndicator = eventList.querySelector('.loading-card');
+            if (loadingIndicator) {
+              loadingIndicator.remove();
+            }
+            // Append new events
+            displayEvents(data.events || [], true);
+          }
+          
+          currentPage = data.page || 1;
+          hasMoreEvents = data.hasMore || false;
         })
         .catch(err => {
-          if (err.message === 'Request timeout') {
-            eventList.innerHTML = '<div class="event-card error-card">Request timed out. Please try again.</div>';
+          if (page === 1) {
+            if (err.message === 'Request timeout') {
+              eventList.innerHTML = '<div class="event-card error-card">Request timed out. Please try again.</div>';
+            } else {
+              eventList.innerHTML = '<div class="event-card error-card">Error loading events. Please try again.</div>';
+            }
           } else {
-            eventList.innerHTML = '<div class="event-card error-card">Error loading events. Please try again.</div>';
+            // Remove loading indicator on error
+            const loadingIndicator = eventList.querySelector('.loading-card');
+            if (loadingIndicator) {
+              loadingIndicator.remove();
+            }
           }
+        })
+        .finally(() => {
+          isLoading = false;
         });
     }
-    function displayEvents(events) {
+    
+    function displayEvents(events, append = false) {
       const eventList = document.getElementById('eventList');
-      eventList.innerHTML = '';
-      if (!events.length) {
+      
+      if (!append) {
+        eventList.innerHTML = '';
+      }
+      
+      if (!events.length && !append) {
         eventList.innerHTML = '<div class="event-card">No events found</div>';
         return;
       }
+      
+      // Use DocumentFragment for better performance
+      const fragment = document.createDocumentFragment();
+      
       events.forEach(event => {
         const eventCard = document.createElement('div');
         eventCard.className = 'event-card';
@@ -518,16 +647,39 @@
             <button class="event-action-btn edit-btn" title="Edit">&#9998;</button>
           </div>
         `;
+        
         // Tile click (excluding edit/delete buttons)
         eventCard.addEventListener('click', function(e) {
-          if (e.target.closest('.event-action-btn')) return; // Ignore if edit/delete clicked
+          if (e.target.closest('.event-action-btn')) return;
           showEventSummaryModal(event);
         });
+        
         eventCard.querySelector('.delete-btn').addEventListener('click', () => {
           deleteEvent(event.eventId);
         });
+        
         eventCard.querySelector('.edit-btn').addEventListener('click', () => editEvent(event.eventId));
-        eventList.appendChild(eventCard);
+        
+        fragment.appendChild(eventCard);
+      });
+      
+      eventList.appendChild(fragment);
+    }
+    
+    // Infinite scroll for events
+    function setupInfiniteScroll() {
+      const eventList = document.getElementById('eventList');
+      eventList.addEventListener('scroll', function() {
+        if (isLoading || !hasMoreEvents) return;
+        
+        const scrollTop = eventList.scrollTop;
+        const scrollHeight = eventList.scrollHeight;
+        const clientHeight = eventList.clientHeight;
+        
+        // Load more when user is near bottom
+        if (scrollTop + clientHeight >= scrollHeight - 100) {
+          loadEvents(currentPage + 1, true);
+        }
       });
     }
 
@@ -1018,6 +1170,7 @@
       });
       // Initial load: show events
       showPage('events'); setNavActive(0); loadEvents();
+      setupInfiniteScroll(); // Setup infinite scroll
     });
 
     // Event Summary Modal logic
